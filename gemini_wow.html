@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>יוצר רקעים הייטק – orenGamchi</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#111; font-family:Arial,sans-serif; }
+    #toolbar, #subtoolbar {
+      position:absolute; left:0; right:0;
+      display:flex; overflow-x:auto; padding:8px;
+      background:rgba(20,20,20,0.8); backdrop-filter:blur(6px); z-index:10;
+    }
+    #toolbar { top:0; }
+    #subtoolbar { top:56px; }
+    #toolbar button, #subtoolbar button, #subtoolbar input[type=range], #subtoolbar input[type=color], #subtoolbar input[type=text], #subtoolbar select {
+      flex:none; margin:0 4px; padding:8px; border:1px solid #555; border-radius:4px;
+      background:transparent; color:#fff; font-size:14px; cursor:pointer;
+      transition:background .2s, border-color .2s, box-shadow .2s;
+      text-align:center; position:relative;
+    }
+    #toolbar button i { display:block; font-size:20px; margin-bottom:4px; }
+    #subtoolbar input[type=range] { width:120px; }
+    #subtoolbar input[type=color] { width:40px; height:24px; padding:0; }
+    #subtoolbar input[type=text] { width:150px; padding:6px; }
+    #subtoolbar select { padding:6px; }
+    button.active {
+      background:rgba(0,200,255,0.2) !important;
+      border-color:#0ff !important; color:#0ff !important;
+      box-shadow:0 0 8px #0ff !important;
+    }
+    #toolbar button[data-tooltip]::after {
+      content: attr(data-tooltip);
+      position:absolute; top:100%; left:50%;
+      transform:translateX(-50%); margin-top:4px;
+      background:#333; color:#fff; padding:2px 6px;
+      font-size:12px; border-radius:4px; white-space:nowrap;
+      opacity:0; pointer-events:none; transition:opacity .2s;
+    }
+    #toolbar button:hover[data-tooltip]::after { opacity:1; }
+    #fpsCounter {
+      position:absolute; bottom:8px; left:8px;
+      color:#0ff; font-family:monospace; font-size:14px;
+      text-shadow:0 0 4px #000; z-index:10;
+    }
+    footer {
+      position:absolute; bottom:0; left:0; right:0;
+      text-align:center; padding:4px 0;
+      font-size:12px; color:#0ff; background:rgba(0,0,0,0.6); z-index:10;
+    }
+    canvas { position:absolute; top:0; left:0; display:block; }
+    #threeDCanvas { display:none; pointer-events:none; }
+    .size-label {
+      color:#fff; font-family:monospace; font-size:14px; margin-left:8px; align-self:center;
+    }
+    #notification {
+      position:absolute; bottom:30px; left:50%; transform:translateX(-50%);
+      background:rgba(255,50,50,0.8); color:#fff; padding:8px 16px;
+      border-radius:4px; font-size:14px; z-index:20;
+      opacity:0; transition:opacity 0.5s;
+    }
+    #notification.show { opacity:1; }
+
+    /* CSS for screen recording - adjusted to fit better */
+    #screenRecordControls {
+        position: absolute;
+        top: 120px; /* Adjusted to be below subtoolbar */
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(30,30,30,0.9);
+        padding: 15px;
+        border-radius: 8px;
+        z-index: 15;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        border: 1px solid #555;
+    }
+    #screenRecordControls h3 { font-size: 16px; margin-bottom: 10px; color: #fff; }
+    #screenRecordControls label, #screenRecordControls select, #screenRecordControls button { margin: 5px; font-size: 14px; color: #fff; background: transparent; border: 1px solid #555; }
+    #screenRecordControls select { padding: 6px; color: #000; } /* Select text color needs to be visible */
+    #screenRecordControls button {
+      padding: 10px 15px; /* Adjusted padding */
+      cursor: pointer;
+      background-color: #0078d7;
+      color: white;
+      border-radius: 4px;
+      border: none;
+    }
+    #screenRecordControls button:disabled { background-color: #777; }
+    #recordStatus { margin-top: 10px; font-size: 14px; text-align: center; color: #0ff; }
+
+    #preOverlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      color: yellow;
+      font-size: 120px;
+      font-weight: bold;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+    }
+    #sideCounter {
+      display: none;
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(255,255,0,0.8);
+      color: #000;
+      font-size: 48px;
+      font-weight: bold;
+      padding: 10px;
+      border-radius: 8px;
+      z-index: 10000;
+    }
+    #borderOverlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      box-sizing: border-box;
+      border: 10px solid yellow;
+      pointer-events: none;
+      z-index: 9999;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="btnColors" data-tooltip="פלטת צבעים"><i class="fas fa-palette"></i>צבעים</button>
+    <button id="btnMotion" data-tooltip="סוג תנועה"><i class="fas fa-wind"></i>תנועה</button>
+    <button id="btnShapes" data-tooltip="בחר צורה"><i class="fas fa-shapes"></i>צורה</button>
+    <button id="btnStyle" data-tooltip="סגנון צביעה"><i class="fas fa-fill-drip"></i>סגנון</button>
+    <button id="btnSpeed" data-tooltip="מהירות"><i class="fas fa-tachometer-alt"></i>מהירות</button>
+    <button id="btnDensity" data-tooltip="צפיפות חלקיקים"><i class="fas fa-grip-lines"></i>צפיפות</button>
+    <button id="btnSize" data-tooltip="גודל חלקיקים"><i class="fas fa-text-height"></i>גודל</button>
+    <button id="btnCamera" data-tooltip="אפקט מצלמה"><i class="fas fa-camera"></i>מצלמה</button>
+    <button id="btn3D" data-tooltip="תלת ממד"><i class="fas fa-cube"></i>3D</button>
+    <button id="btnWaves" data-tooltip="גלים"><i class="fas fa-water"></i>גלים</button>
+    <button id="btnLayers" data-tooltip="שכבות Z"><i class="fas fa-layer-group"></i>שכבות</button>
+    <button id="btnPhysics" data-tooltip="פיזיקה"><i class="fas fa-atom"></i>פיזיקה</button>
+    <button id="btnKaleido" data-tooltip="קלידוסקופ"><i class="fas fa-th-large"></i>קלידוסקופ</button>
+    <button id="btnGradient" data-tooltip="גרדיאנט"><i class="fas fa-rainbow"></i>גרדיאנט</button>
+    <button id="btnTrails" data-tooltip="שובל"><i class="fas fa-stream"></i>שובל</button>
+    <button id="btnBlur" data-tooltip="טשטוש"><i class="fas fa-filter"></i>טשטוש</button>
+    <button id="btnMotionBlur" data-tooltip="טשטוש תנועה"><i class="fas fa-blur"></i>טשטוש תנועה</button>
+    <button id="btnLight" data-tooltip="אור וצל"><i class="fas fa-lightbulb"></i>אור</button>
+    <button id="btnText" data-tooltip="טקסט"><i class="fas fa-font"></i>טקסט</button>
+    <button id="btnFPS" data-tooltip="הצגת FPS"><i class="fas fa-tachometer-alt"></i>FPS</button>
+    <button id="btnSound" data-tooltip="צליל"><i class="fas fa-microphone"></i>צליל</button>
+    <button id="btnMouse" data-tooltip="עכבר"><i class="fas fa-mouse-pointer"></i>עכבר</button>
+    <button id="btnParallax" data-tooltip="פרלקס"><i class="fas fa-arrows-alt-h"></i>פרלקס</button>
+    <button id="btnReset" data-tooltip="איפוס"><i class="fas fa-redo-alt"></i>אפס</button>
+    <button id="btnSave" data-tooltip="שמור תמונה"><i class="fas fa-save"></i>שמור</button>
+    <button id="btnToggleRecord" data-tooltip="הקלטת מסך"><i class="fas fa-video"></i>הקלט</button>
+  </div>
+  <div id="subtoolbar"></div>
+  <div id="fpsCounter"></div>
+  <div id="notification"></div>
+  <canvas id="bgCanvas"></canvas>
+  <canvas id="threeDCanvas"></canvas>
+
+  <div id="screenRecordControls" style="display: none;"> <h3>הקלטת מסך ל-8 שניות</h3>
+    <label for="resolutionSelect">בחר רזולוציה:</label>
+    <select id="resolutionSelect">
+      <option value="1080">HD (1920×1080)</option>
+      <option value="canvas">Canvas Size</option>
+      <option value="4k">4K (3840×2160)</option>
+      <option value="8k">8K (7680×4320)</option>
+    </select>
+    <button id="startRecordBtn">התחל הקלטה</button>
+    <div id="recordStatus"></div>
+  </div>
+
+  <div id="preOverlay"></div>
+  <div id="sideCounter"></div>
+  <div id="borderOverlay"></div>
+
+  <footer>by orenGamchi</footer>
+  <script>
+    // --- Setup ---
+    const canvas = document.getElementById('bgCanvas'),
+          ctx = canvas.getContext('2d');
+    let W = canvas.width = innerWidth, H = canvas.height = innerHeight;
+
+    // Trails off-screen canvas
+    const trailCanvas = document.createElement('canvas');
+    trailCanvas.width = W;
+    trailCanvas.height = H;
+    const trailCtx = trailCanvas.getContext('2d');
+
+    const defaultConfig = {
+      fillColor: '#0ff', strokeColor: '#005f5f',
+      motionIndex: 0, shapeIndex: 0, styleIndex: 0,
+      speed: 1, speedMultiplier: 1, density: 80, baseSize: 30, sizeMultiplier: 1,
+      cameraEffect: 0, use3D: false, waves: false, waveStyle: 'sinusoidal',
+      layers: false, physics: false,
+      kaleido: false, kaleidoSegments: 4,
+      gradient: false, gradientColors: ['#0ff', '#f0f'],
+      trails: false, trailAlpha: 0.1,
+      blur: 0, motionBlur: false, motionBlurAmount: 2,
+      light: true, shadowIntensity: 10,
+      textEnabled: false, textContent: 'Hi-Tech', textColor: '#0ff', textSize: 50, textEffect: 'none',
+      showFPS: false, sound: false, mouse: false, mouseAttraction: 0.02, parallax: false,
+      physicsGravity: 0.0015
+    };
+    let config = { ...defaultConfig };
+
+    const motions = [
+      'drift', 'rotate', 'pulse', 'wave',
+      'horizontalLine', 'verticalLine', 'diagonalLine', 'gridHorizontal', 'gridVertical',
+      'waveRadial', 'zigzagRadial', 'bounceRadial', 'swirlOut', 'swirlIn'
+    ];
+    const shapes2D = ['circle', 'square', 'triangle', 'line', 'star', 'pentagon', 'hexagon', 'flower', 'heart', 'diamond', 'octagon', 'cross', 'arrow', 'moon', 'cloud', 'spiral'];
+    const styles = ['fill', 'stroke', 'fill+stroke'];
+    const speeds = [0.5, 1, 1.5, 2];
+    const camEffects = ['none', 'zoom', 'shake', 'rotateView', 'pan', 'orbit'];
+    const textEffects = ['none', 'bold', 'italic', 'shadow', 'outline', 'blink', 'extrude'];
+    const waveStyles = ['sinusoidal', 'turbulent', 'radial', 'layered', 'spiral', 'chaotic', 'pulse', 'ripple', 'flow', 'vortex'];
+
+    const btnMap = {
+      palette: 'btnColors', motion: 'btnMotion', shape: 'btnShapes', style: 'btnStyle',
+      speed: 'btnSpeed', density: 'btnDensity', size: 'btnSize', camera: 'btnCamera',
+      '3D': 'btn3D', waves: 'btnWaves', layers: 'btnLayers', physics: 'btnPhysics',
+      kaleido: 'btnKaleido', gradient: 'btnGradient', trails: 'btnTrails',
+      blur: 'btnBlur', motionBlur: 'btnMotionBlur', light: 'btnLight', text: 'btnText',
+      FPS: 'btnFPS', sound: 'btnSound', mouse: 'btnMouse', parallax: 'btnParallax', reset: 'btnReset', save: 'btnSave',
+      toggleRecord: 'btnToggleRecord' // Added toggle record button
+    };
+
+    const sub = document.getElementById('subtoolbar'),
+          fpsDiv = document.getElementById('fpsCounter'),
+          notificationDiv = document.getElementById('notification'),
+          toolbar = document.getElementById('toolbar');
+
+    let lastTime = performance.now(), frameCount = 0, fps = 0;
+    let mouseX = W / 2, mouseY = H / 2;
+
+    function showNotification(message) {
+      notificationDiv.textContent = message;
+      notificationDiv.classList.add('show');
+      setTimeout(() => {
+        notificationDiv.classList.remove('show');
+      }, 5000);
+    }
+
+    function setupDragToScroll(element) {
+      let isDragging = false, startX, longPressTimer;
+      element.addEventListener('mousedown', e => {
+        longPressTimer = setTimeout(() => {
+          isDragging = true;
+          startX = e.clientX;
+          element.style.cursor = 'grabbing';
+        }, 200);
+      });
+      element.addEventListener('mousemove', e => {
+        if (isDragging) {
+          const deltaX = e.clientX - startX;
+          element.scrollLeft -= deltaX;
+          startX = e.clientX;
+        }
+      });
+      const stopDragging = () => {
+        clearTimeout(longPressTimer);
+        isDragging = false;
+        element.style.cursor = 'default';
+      };
+      element.addEventListener('mouseup', stopDragging);
+      element.addEventListener('mouseleave', stopDragging);
+    }
+
+    setupDragToScroll(toolbar);
+    setupDragToScroll(sub);
+
+    let audioCtx, analyser, dataArr;
+    async function initAudio() {
+      if (audioCtx) return;
+      try {
+        audioCtx = new AudioContext();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const src = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        dataArr = new Uint8Array(analyser.frequencyBinCount);
+        src.connect(analyser);
+      } catch (e) {
+        config.sound = false;
+        if (e.name === 'NotAllowedError') {
+          showNotification('גישה למיקרופון נדחתה. אנא אפשר גישה בהגדרות הדפדפן.');
+        } else if (e.name === 'NotFoundError') {
+          showNotification('לא נמצא מיקרופון זמין.');
+        } else {
+          showNotification('הפעלת שמע נכשלה. אנא נסה שוב מאוחר יותר.');
+        }
+        console.warn('Audio initialization failed:', e.message);
+      }
+    }
+
+    function renderSub(key) {
+      sub.innerHTML = '';
+      // Hide screen recording controls when other subtoolbars are shown
+      document.getElementById('screenRecordControls').style.display = 'none';
+
+      switch (key) {
+        case 'palette': /* ... existing cases ... */
+        // --- All existing cases from btnColors to btnBlur ---
+        case 'palette':
+          const cFill = document.createElement('input');
+          cFill.type = 'color';
+          cFill.value = config.fillColor;
+          cFill.oninput = e => config.fillColor = e.target.value;
+          const cStroke = document.createElement('input');
+          cStroke.type = 'color';
+          cStroke.value = config.strokeColor;
+          cStroke.oninput = e => config.strokeColor = e.target.value;
+          sub.appendChild(cFill);
+          sub.appendChild(cStroke);
+          break;
+        case 'motion':
+          motions.forEach((m, i) => {
+            const b = document.createElement('button');
+            b.textContent = m;
+            if (i === config.motionIndex) b.classList.add('active');
+            b.onclick = () => { config.motionIndex = i; initParticles(); renderSub(key); };
+            sub.appendChild(b);
+          });
+          break;
+        case 'shape':
+          shapes2D.forEach((s, i) => {
+            const b = document.createElement('button');
+            b.textContent = s;
+            if (i === config.shapeIndex) b.classList.add('active');
+            b.onclick = () => { config.shapeIndex = i; initParticles(); renderSub(key); };
+            sub.appendChild(b);
+          });
+          break;
+        case 'style':
+          styles.forEach((st, i) => {
+            const b = document.createElement('button');
+            b.textContent = st;
+            if (i === config.styleIndex) b.classList.add('active');
+            b.onclick = () => { config.styleIndex = i; renderSub(key); };
+            sub.appendChild(b);
+          });
+          break;
+        case 'speed':
+          const rSpeed = document.createElement('input');
+          rSpeed.type = 'range';
+          rSpeed.min = 0;
+          rSpeed.max = speeds.length - 1;
+          rSpeed.step = 1;
+          rSpeed.value = speeds.indexOf(config.speed);
+          rSpeed.oninput = e => config.speed = speeds[e.target.value];
+          const rSpeedMultiplier = document.createElement('input');
+          rSpeedMultiplier.type = 'range';
+          rSpeedMultiplier.min = 0.1;
+          rSpeedMultiplier.max = 3;
+          rSpeedMultiplier.step = 0.1;
+          rSpeedMultiplier.value = config.speedMultiplier;
+          rSpeedMultiplier.oninput = e => {
+            config.speedMultiplier = +e.target.value;
+            speedLabel.textContent = config.speedMultiplier.toFixed(1);
+          };
+          const speedLabel = document.createElement('span');
+          speedLabel.className = 'size-label';
+          speedLabel.textContent = config.speedMultiplier.toFixed(1);
+          sub.appendChild(rSpeed);
+          sub.appendChild(rSpeedMultiplier);
+          sub.appendChild(speedLabel);
+          break;
+        case 'density':
+          const rDensity = document.createElement('input');
+          rDensity.type = 'range';
+          rDensity.min = 10;
+          rDensity.max = 500;
+          rDensity.step = 10;
+          rDensity.value = config.density;
+          rDensity.oninput = e => { config.density = +e.target.value; initParticles(); };
+          sub.appendChild(rDensity);
+          break;
+        case 'size':
+          const rSize = document.createElement('input');
+          rSize.type = 'range';
+          rSize.min = 1;
+          rSize.max = 200;
+          rSize.step = 1;
+          rSize.value = config.baseSize;
+          rSize.oninput = e => {
+            config.baseSize = +e.target.value;
+            sizeLabel.textContent = config.baseSize + 'px';
+          };
+          const rSizeMultiplier = document.createElement('input');
+          rSizeMultiplier.type = 'range';
+          rSizeMultiplier.min = 0.1;
+          rSizeMultiplier.max = 3;
+          rSizeMultiplier.step = 0.1;
+          rSizeMultiplier.value = config.sizeMultiplier;
+          rSizeMultiplier.oninput = e => {
+            config.sizeMultiplier = +e.target.value;
+            sizeMultiplierLabel.textContent = config.sizeMultiplier.toFixed(1);
+          };
+          const sizeLabel = document.createElement('span');
+          sizeLabel.className = 'size-label';
+          sizeLabel.textContent = config.baseSize + 'px';
+          const sizeMultiplierLabel = document.createElement('span');
+          sizeMultiplierLabel.className = 'size-label';
+          sizeMultiplierLabel.textContent = config.sizeMultiplier.toFixed(1);
+          sub.appendChild(rSize);
+          sub.appendChild(rSizeMultiplier);
+          sub.appendChild(sizeLabel);
+          sub.appendChild(sizeMultiplierLabel);
+          break;
+        case 'camera':
+          camEffects.forEach((ce, i) => {
+            const b = document.createElement('button');
+            b.textContent = ce || 'none';
+            if (i === config.cameraEffect) b.classList.add('active');
+            b.onclick = () => { config.cameraEffect = i; renderSub(key); };
+            sub.appendChild(b);
+          });
+          break;
+        case 'kaleido':
+          const bKaleido = document.createElement('button');
+          bKaleido.textContent = config.kaleido ? 'ON' : 'OFF';
+          if (config.kaleido) bKaleido.classList.add('active');
+          bKaleido.onclick = () => {
+            config.kaleido = !config.kaleido;
+            renderSub(key);
+          };
+          sub.appendChild(bKaleido);
+          const rSegments = document.createElement('input');
+          rSegments.type = 'range';
+          rSegments.min = 3;
+          rSegments.max = 8;
+          rSegments.step = 1;
+          rSegments.value = config.kaleidoSegments;
+          rSegments.oninput = e => {
+            config.kaleidoSegments = +e.target.value;
+            segmentsLabel.textContent = config.kaleidoSegments;
+          };
+          const segmentsLabel = document.createElement('span');
+          segmentsLabel.className = 'size-label';
+          segmentsLabel.textContent = config.kaleidoSegments;
+          sub.appendChild(rSegments);
+          sub.appendChild(segmentsLabel);
+          break;
+        case 'gradient':
+          const bGradient = document.createElement('button');
+          bGradient.textContent = config.gradient ? 'ON' : 'OFF';
+          if (config.gradient) bGradient.classList.add('active');
+          bGradient.onclick = () => {
+            config.gradient = !config.gradient;
+            renderSub(key);
+          };
+          sub.appendChild(bGradient);
+          for (let i = 0; i < 3; i++) {
+            const cGradient = document.createElement('input');
+            cGradient.type = 'color';
+            cGradient.value = config.gradientColors[i] || '#fff';
+            cGradient.oninput = e => {
+              config.gradientColors[i] = e.target.value;
+              if (config.gradientColors.length > i + 1 && !config.gradientColors[i + 1]) {
+                config.gradientColors[i + 1] = e.target.value;
+              }
+            };
+            sub.appendChild(cGradient);
+          }
+          break;
+        case 'waves':
+          const bWaves = document.createElement('button');
+          bWaves.textContent = config.waves ? 'ON' : 'OFF';
+          if (config.waves) bWaves.classList.add('active');
+          bWaves.onclick = () => {
+            config.waves = !config.waves;
+            renderSub(key);
+          };
+          const sWaveStyle = document.createElement('select');
+          waveStyles.forEach(style => {
+            const opt = document.createElement('option');
+            opt.value = style;
+            opt.textContent = style;
+            if (style === config.waveStyle) opt.selected = true;
+            sWaveStyle.appendChild(opt);
+          });
+          sWaveStyle.onchange = e => config.waveStyle = e.target.value;
+          sub.appendChild(bWaves);
+          sub.appendChild(sWaveStyle);
+          break;
+        case 'layers':
+        case 'physics':
+        case 'mouse':
+        case 'parallax':
+        case 'motionBlur':
+        case 'showFPS':
+        case 'sound':
+          const b = document.createElement('button');
+          b.textContent = config[key] ? 'ON' : 'OFF';
+          if (config[key]) b.classList.add('active');
+          b.onclick = () => {
+            config[key] = !config[key];
+            if (key === 'sound' && config.sound) initAudio();
+            renderSub(key);
+          };
+          sub.appendChild(b);
+          if (key === 'motionBlur') {
+            const rMotionBlur = document.createElement('input');
+            rMotionBlur.type = 'range';
+            rMotionBlur.min = 0;
+            rMotionBlur.max = 10;
+            rMotionBlur.step = 1;
+            rMotionBlur.value = config.motionBlurAmount;
+            rMotionBlur.oninput = e => config.motionBlurAmount = +e.target.value;
+            sub.appendChild(rMotionBlur);
+          } else if (key === 'physics') {
+            const gPhysics = document.createElement('input');
+            gPhysics.type = 'range';
+            gPhysics.min = 0;
+            gPhysics.max = 0.01;
+            gPhysics.step = 0.0005;
+            gPhysics.value = config.physicsGravity;
+            gPhysics.oninput = e => config.physicsGravity = +e.target.value;
+            sub.appendChild(gPhysics);
+          } else if (key === 'mouse') {
+            const rAttraction = document.createElement('input');
+            rAttraction.type = 'range';
+            rAttraction.min = 0;
+            rAttraction.max = 0.1;
+            rAttraction.step = 0.005;
+            rAttraction.value = config.mouseAttraction;
+            rAttraction.oninput = e => {
+              config.mouseAttraction = +e.target.value;
+              attractionLabel.textContent = config.mouseAttraction.toFixed(3);
+            };
+            const attractionLabel = document.createElement('span');
+            attractionLabel.className = 'size-label';
+            attractionLabel.textContent = config.mouseAttraction.toFixed(3);
+            sub.appendChild(rAttraction);
+            sub.appendChild(attractionLabel);
+          }
+          break;
+        case 'trails':
+          const bTrails = document.createElement('button');
+          bTrails.textContent = config.trails ? 'ON' : 'OFF';
+          if (config.trails) bTrails.classList.add('active');
+          bTrails.onclick = () => {
+            config.trails = !config.trails;
+            renderSub(key);
+          };
+          const rTrailAlpha = document.createElement('input');
+          rTrailAlpha.type = 'range';
+          rTrailAlpha.min = 0.01;
+          rTrailAlpha.max = 0.5;
+          rTrailAlpha.step = 0.01;
+          rTrailAlpha.value = config.trailAlpha;
+          rTrailAlpha.oninput = e => {
+            config.trailAlpha = +e.target.value;
+            trailLabel.textContent = config.trailAlpha.toFixed(2);
+          };
+          const trailLabel = document.createElement('span');
+          trailLabel.className = 'size-label';
+          trailLabel.textContent = config.trailAlpha.toFixed(2);
+          sub.appendChild(bTrails);
+          sub.appendChild(rTrailAlpha);
+          sub.appendChild(trailLabel);
+          break;
+        case 'light':
+          const bLight = document.createElement('button');
+          bLight.textContent = config.light ? 'ON' : 'OFF';
+          if (config.light) bLight.classList.add('active');
+          bLight.onclick = () => {
+            config.light = !config.light;
+            renderSub(key);
+          };
+          sub.appendChild(bLight);
+          const rShadow = document.createElement('input');
+          rShadow.type = 'range';
+          rShadow.min = 0;
+          rShadow.max = 100;
+          rShadow.step = 1;
+          rShadow.value = config.shadowIntensity;
+          rShadow.oninput = e => {
+            config.shadowIntensity = +e.target.value;
+            shadowLabel.textContent = config.shadowIntensity;
+          };
+          const shadowLabel = document.createElement('span');
+          shadowLabel.className = 'size-label';
+          shadowLabel.textContent = config.shadowIntensity;
+          sub.appendChild(rShadow);
+          sub.appendChild(shadowLabel);
+          break;
+        case 'text':
+          const bText = document.createElement('button');
+          bText.textContent = config.textEnabled ? 'ON' : 'OFF';
+          if (config.textEnabled) bText.classList.add('active');
+          bText.onclick = () => {
+            config.textEnabled = !config.textEnabled;
+            renderSub(key);
+          };
+          const tInput = document.createElement('input');
+          tInput.type = 'text';
+          tInput.value = config.textContent;
+          tInput.oninput = e => config.textContent = e.target.value;
+          const cText = document.createElement('input');
+          cText.type = 'color';
+          cText.value = config.textColor;
+          cText.oninput = e => config.textColor = e.target.value;
+          const rTextSize = document.createElement('input');
+          rTextSize.type = 'range';
+          rTextSize.min = 10;
+          rTextSize.max = 200;
+          rTextSize.step = 1;
+          rTextSize.value = config.textSize;
+          rTextSize.oninput = e => {
+            config.textSize = +e.target.value;
+            textSizeLabel.textContent = config.textSize + 'px';
+          };
+          const textSizeLabel = document.createElement('span');
+          textSizeLabel.className = 'size-label';
+          textSizeLabel.textContent = config.textSize + 'px';
+          const sEffect = document.createElement('select');
+          textEffects.forEach(effect => {
+            const opt = document.createElement('option');
+            opt.value = effect;
+            opt.textContent = effect;
+            if (effect === config.textEffect) opt.selected = true;
+            sEffect.appendChild(opt);
+          });
+          sEffect.onchange = e => config.textEffect = e.target.value;
+          sub.appendChild(bText);
+          sub.appendChild(tInput);
+          sub.appendChild(cText);
+          sub.appendChild(rTextSize);
+          sub.appendChild(textSizeLabel);
+          sub.appendChild(sEffect);
+          break;
+        case 'blur':
+          const rBlur = document.createElement('input');
+          rBlur.type = 'range';
+          rBlur.min = 0;
+          rBlur.max = 10;
+          rBlur.step = 0.5;
+          rBlur.value = config.blur;
+          rBlur.oninput = e => config.blur = +e.target.value;
+          sub.appendChild(rBlur);
+          break;
+        // --- End of existing cases ---
+        case 'toggleRecord': // Handle the new toggle record button
+            sub.innerHTML = ''; // Clear subtoolbar for this
+            const recordControls = document.getElementById('screenRecordControls');
+            recordControls.style.display = recordControls.style.display === 'none' ? 'flex' : 'none';
+            break;
+      }
+    }
+
+    Object.entries(btnMap).forEach(([key, id]) => {
+      document.getElementById(id).addEventListener('click', () => {
+        if (key === 'reset') {
+          config = { ...defaultConfig };
+          initParticles();
+          renderSub('palette'); // Or your default subtoolbar
+        } else if (key === 'save') {
+          const a = document.createElement('a');
+          a.download = 'bg.png';
+          a.href = canvas.toDataURL();
+          a.click();
+        } else if (key === 'toggleRecord') {
+            renderSub(key); // Special handling for toggle
+        }
+        else {
+          renderSub(key);
+        }
+        // Manage active state for buttons
+        Object.values(btnMap).forEach(id2 => document.getElementById(id2).classList.remove('active'));
+        if (key !== 'toggleRecord' || document.getElementById('screenRecordControls').style.display !== 'none') {
+             document.getElementById(id).classList.add('active');
+        }
+         if (key !== 'toggleRecord'){
+             document.getElementById('screenRecordControls').style.display = 'none';
+         }
+      });
+    });
+
+    window.addEventListener('mousemove', e => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    let particles = [];
+    function initParticles() {
+      // ... (existing initParticles function - no changes needed here for screen recording)
+      particles = [];
+      const currentMotion = motions[config.motionIndex];
+      let rowCount = Math.ceil(Math.sqrt(config.density));
+      let rowSpacing = H / (rowCount + 1);
+      let colSpacing = W / (rowCount + 1);
+
+      if (['horizontalLine', 'verticalLine', 'diagonalLine', 'gridHorizontal', 'gridVertical'].includes(currentMotion)) {
+        let particlesPerRow = Math.ceil(config.density / rowCount);
+        for (let row = 0; row < rowCount; row++) {
+          for (let i = 0; i < particlesPerRow && particles.length < config.density; i++) {
+            let particle = {
+              size: config.baseSize * (0.5 + Math.random()),
+              vx: (Math.random() > 0.5 ? 1 : -1) * 2 * config.speed,
+              vy: (Math.random() > 0.5 ? 1 : -1) * 2 * config.speed,
+              phase: Math.random() * Math.PI * 2,
+              angle: Math.random() * Math.PI * 2,
+              z: config.layers ? Math.random() * 100 : 0,
+              rowIndex: row
+            };
+
+            if (currentMotion === 'horizontalLine' || currentMotion === 'gridHorizontal') {
+              particle.y = (row + 1) * rowSpacing;
+              particle.x = Math.random() * W;
+            } else if (currentMotion === 'verticalLine' || currentMotion === 'gridVertical') {
+              particle.x = (row + 1) * colSpacing;
+              particle.y = Math.random() * H;
+            } else if (currentMotion === 'diagonalLine') {
+              let offset = (row + 1) * Math.min(W, H) / (rowCount + 1);
+              particle.x = offset + (Math.random() - 0.5) * rowSpacing;
+              particle.y = offset + (Math.random() - 0.5) * rowSpacing;
+            }
+
+            particles.push(particle);
+          }
+        }
+      } else {
+        for (let i = 0; i < config.density; i++) {
+          particles.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            size: config.baseSize * (0.5 + Math.random()),
+            vx: (Math.random() - 0.5) * 2 * config.speed,
+            vy: (Math.random() - 0.5) * 2 * config.speed,
+            phase: Math.random() * Math.PI * 2,
+            angle: Math.random() * Math.PI * 2,
+            z: config.layers ? Math.random() * 100 : 0,
+            radialPhase: Math.random() * Math.PI * 2,
+            radialDistance: Math.random() * Math.max(W, H) / 2
+          });
+        }
+      }
+    }
+
+    function drawShape(ctx, shape, size) {
+      // ... (existing drawShape function)
+            ctx.beginPath();
+      if (shape === 'circle') {
+        ctx.arc(0, 0, size, 0, 2 * Math.PI);
+      } else if (shape === 'square') {
+        ctx.rect(-size / 2, -size / 2, size, size);
+      } else if (shape === 'triangle') {
+        ctx.moveTo(0, -size / 2);
+        ctx.lineTo(size / 2, size / 2);
+        ctx.lineTo(-size / 2, size / 2);
+        ctx.closePath();
+      } else if (shape === 'line') {
+        ctx.moveTo(-size / 2, 0);
+        ctx.lineTo(size / 2, 0);
+      } else if (shape === 'star') {
+        for (let i = 0; i < 5; i++) {
+          ctx.lineTo(Math.cos((18 + i * 72) * Math.PI / 180) * size, -Math.sin((18 + i * 72) * Math.PI / 180) * size);
+          ctx.lineTo(Math.cos((54 + i * 72) * Math.PI / 180) * size * 0.5, -Math.sin((54 + i * 72) * Math.PI / 180) * size * 0.5);
+        }
+        ctx.closePath();
+      } else if (shape === 'pentagon') {
+        for (let i = 0; i < 5; i++) {
+          ctx.lineTo(Math.cos((i * 72) * Math.PI / 180) * size, Math.sin((i * 72) * Math.PI / 180) * size);
+        }
+        ctx.closePath();
+      } else if (shape === 'hexagon') {
+        for (let i = 0; i < 6; i++) {
+          ctx.lineTo(Math.cos((i * 60) * Math.PI / 180) * size, Math.sin((i * 60) * Math.PI / 180) * size);
+        }
+        ctx.closePath();
+      } else if (shape === 'flower') {
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * 45) * Math.PI / 180;
+          const radius = size * (1 + Math.cos(i * Math.PI / 4) * 0.3);
+          ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+        }
+        ctx.closePath();
+      } else if (shape === 'heart') {
+        ctx.moveTo(0, size / 4);
+        ctx.quadraticCurveTo(-size / 2, -size / 2, -size, size / 4);
+        ctx.quadraticCurveTo(-size / 2, size, 0, size);
+        ctx.quadraticCurveTo(size / 2, size, size, size / 4);
+        ctx.quadraticCurveTo(size / 2, -size / 2, 0, size / 4);
+        ctx.closePath();
+      } else if (shape === 'diamond') {
+        ctx.moveTo(0, -size / 2);
+        ctx.lineTo(size / 2, 0);
+        ctx.lineTo(0, size / 2);
+        ctx.lineTo(-size / 2, 0);
+        ctx.closePath();
+      } else if (shape === 'octagon') {
+        for (let i = 0; i < 8; i++) {
+          ctx.lineTo(Math.cos((i * 45) * Math.PI / 180) * size, Math.sin((i * 45) * Math.PI / 180) * size);
+        }
+        ctx.closePath();
+      } else if (shape === 'cross') {
+        ctx.moveTo(-size / 6, -size / 2);
+        ctx.lineTo(-size / 6, -size / 6);
+        ctx.lineTo(-size / 2, -size / 6);
+        ctx.lineTo(-size / 2, size / 6);
+        ctx.lineTo(-size / 6, size / 6);
+        ctx.lineTo(-size / 6, size / 2);
+        ctx.lineTo(size / 6, size / 2);
+        ctx.lineTo(size / 6, size / 6);
+        ctx.lineTo(size / 2, size / 6);
+        ctx.lineTo(size / 2, -size / 6);
+        ctx.lineTo(size / 6, -size / 6);
+        ctx.lineTo(size / 6, -size / 2);
+        ctx.closePath();
+      } else if (shape === 'arrow') {
+        ctx.moveTo(-size / 2, -size / 4);
+        ctx.lineTo(0, -size / 4);
+        ctx.lineTo(0, -size / 2);
+        ctx.lineTo(size / 2, 0);
+        ctx.lineTo(0, size / 2);
+        ctx.lineTo(0, size / 4);
+        ctx.lineTo(-size / 2, size / 4);
+        ctx.closePath();
+      } else if (shape === 'moon') {
+        ctx.arc(0, 0, size / 2, 0, 2 * Math.PI);
+        ctx.moveTo(0, -size / 2);
+        ctx.arc(size / 4, 0, size / 2, -Math.PI / 2, Math.PI / 2, true);
+        ctx.closePath();
+      } else if (shape === 'cloud') {
+        ctx.arc(-size / 4, 0, size / 3, 0, 2 * Math.PI);
+        ctx.arc(size / 4, 0, size / 3, 0, 2 * Math.PI);
+        ctx.arc(0, -size / 4, size / 3, 0, 2 * Math.PI);
+        ctx.rect(-size / 2, -size / 4, size, size / 2);
+        ctx.closePath();
+      } else if (shape === 'spiral') {
+        for (let t = 0; t < 4 * Math.PI; t += 0.1) {
+          const r = (size / 4) * (t / (4 * Math.PI));
+          ctx.lineTo(r * Math.cos(t), r * Math.sin(t));
+        }
+      }
+      ctx.closePath();
+    }
+
+    function createShapePath(shape, size) {
+      // ... (existing createShapePath function)
+            const path = new THREE.Path();
+      if (shape === 'circle') {
+        return null;
+      } else if (shape === 'square') {
+        path.moveTo(-size / 2, -size / 2);
+        path.lineTo(size / 2, -size / 2);
+        path.lineTo(size / 2, size / 2);
+        path.lineTo(-size / 2, size / 2);
+        path.closePath();
+      } else if (shape === 'triangle') {
+        path.moveTo(0, -size / 2);
+        path.lineTo(size / 2, size / 2);
+        path.lineTo(-size / 2, size / 2);
+        path.closePath();
+      } else if (shape === 'line') {
+        path.moveTo(-size / 2, 0);
+        path.lineTo(size / 2, 0);
+      } else if (shape === 'star') {
+        for (let i = 0; i < 5; i++) {
+          path.lineTo(Math.cos((18 + i * 72) * Math.PI / 180) * size, -Math.sin((18 + i * 72) * Math.PI / 180) * size);
+          path.lineTo(Math.cos((54 + i * 72) * Math.PI / 180) * size * 0.5, -Math.sin((54 + i * 72) * Math.PI / 180) * size * 0.5);
+        }
+        path.closePath();
+      } else if (shape === 'pentagon') {
+        for (let i = 0; i < 5; i++) {
+          path.lineTo(Math.cos((i * 72) * Math.PI / 180) * size, Math.sin((i * 72) * Math.PI / 180) * size);
+        }
+        path.closePath();
+      } else if (shape === 'hexagon') {
+        for (let i = 0; i < 6; i++) {
+          path.lineTo(Math.cos((i * 60) * Math.PI / 180) * size, Math.sin((i * 60) * Math.PI / 180) * size);
+        }
+        path.closePath();
+      } else if (shape === 'flower') {
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * 45) * Math.PI / 180;
+          const radius = size * (1 + Math.cos(i * Math.PI / 4) * 0.3);
+          path.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+        }
+        path.closePath();
+      } else if (shape === 'heart') {
+        path.moveTo(0, size / 4);
+        path.quadraticCurveTo(-size / 2, -size / 2, -size, size / 4);
+        path.quadraticCurveTo(-size / 2, size, 0, size);
+        path.quadraticCurveTo(size / 2, size, size, size / 4);
+        path.quadraticCurveTo(size / 2, -size / 2, 0, size / 4);
+        path.closePath();
+      } else if (shape === 'diamond') {
+        path.moveTo(0, -size / 2);
+        path.lineTo(size / 2, 0);
+        path.lineTo(0, size / 2);
+        path.lineTo(-size / 2, 0);
+        path.closePath();
+      } else if (shape === 'octagon') {
+        for (let i = 0; i < 8; i++) {
+          path.lineTo(Math.cos((i * 45) * Math.PI / 180) * size, Math.sin((i * 45) * Math.PI / 180) * size);
+        }
+        path.closePath();
+      } else if (shape === 'cross') {
+        path.moveTo(-size / 6, -size / 2);
+        path.lineTo(-size / 6, -size / 6);
+        path.lineTo(-size / 2, -size / 6);
+        path.lineTo(-size / 2, size / 6);
+        path.lineTo(-size / 6, size / 6);
+        path.lineTo(-size / 6, size / 2);
+        path.lineTo(size / 6, size / 2);
+        path.lineTo(size / 6, size / 6);
+        path.lineTo(size / 2, size / 6);
+        path.lineTo(size / 2, -size / 6);
+        path.lineTo(size / 6, -size / 6);
+        path.lineTo(size / 6, -size / 2);
+        path.closePath();
+      } else if (shape === 'arrow') {
+        path.moveTo(-size / 2, -size / 4);
+        path.lineTo(0, -size / 4);
+        path.lineTo(0, -size / 2);
+        path.lineTo(size / 2, 0);
+        path.lineTo(0, size / 2);
+        path.lineTo(0, size / 4);
+        path.lineTo(-size / 2, size / 4);
+        path.closePath();
+      } else if (shape === 'moon') {
+        path.arc(0, 0, size / 2, 0, 2 * Math.PI);
+        path.moveTo(0, -size / 2);
+        path.arc(size / 4, 0, size / 2, -Math.PI / 2, Math.PI / 2, true);
+        path.closePath();
+      } else if (shape === 'cloud') {
+        path.arc(-size / 4, 0, size / 3, 0, 2 * Math.PI);
+        path.arc(size / 4, 0, size / 3, 0, 2 * Math.PI);
+        path.arc(0, -size / 4, size / 3, 0, 2 * Math.PI);
+        path.moveTo(-size / 2, size / 4);
+        path.lineTo(-size / 2, -size / 4);
+        path.lineTo(size / 2, -size / 4);
+        path.lineTo(size / 2, size / 4);
+        path.closePath();
+      } else if (shape === 'spiral') {
+        for (let t = 0; t < 4 * Math.PI; t += 0.1) {
+          const r = (size / 4) * (t / (4 * Math.PI));
+          path.lineTo(r * Math.cos(t), r * Math.sin(t));
+        }
+      }
+      return path;
+    }
+
+    function draw() {
+      // ... (existing draw function - no changes needed here for screen recording logic itself, but overlays will appear on top)
+      // Clear main canvas
+      ctx.clearRect(0, 0, W, H);
+
+      // Handle trails
+      if (config.trails) {
+        trailCtx.fillStyle = 'rgba(0,0,0,' + config.trailAlpha + ')';
+        trailCtx.fillRect(0, 0, W, H);
+      } else {
+        trailCtx.clearRect(0, 0, W, H);
+      }
+
+      // Gradient background
+      if (config.gradient) {
+        const g = ctx.createLinearGradient(0, 0, W, H);
+        const validColors = config.gradientColors.filter(c => c);
+        validColors.forEach((color, i) => {
+          g.addColorStop(i / (validColors.length - 1), color);
+        });
+        ctx.fillStyle = validColors.length >= 2 ? g : validColors[0] || '#000';
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      // Waves
+      if (config.waves) {
+        const t = Date.now() * 0.002;
+        switch (config.waveStyle) {
+          case 'sinusoidal':
+            for (let i = 0; i < 3; i++) {
+              ctx.beginPath();
+              const amp = 20 + i * 10, y0 = H / 3 * i + 50;
+              for (let x = 0; x <= W; x += 10) {
+                ctx.lineTo(x, y0 + Math.sin(x * 0.01 + t + i) * amp);
+              }
+              ctx.lineTo(W, H);
+              ctx.lineTo(0, H);
+              ctx.fillStyle = 'rgba(0,200,255,' + (0.05 + i * 0.02) + ')';
+              ctx.fill();
+            }
+            break;
+          case 'turbulent':
+            for (let i = 0; i < 4; i++) {
+              ctx.beginPath();
+              const amp = 15 + i * 5, y0 = H / 4 * i + 50;
+              for (let x = 0; x <= W; x += 5) {
+                ctx.lineTo(x, y0 + Math.sin(x * 0.02 + t + i) * amp + Math.cos(x * 0.01 + t) * amp * 0.5);
+              }
+              ctx.lineTo(W, H);
+              ctx.lineTo(0, H);
+              ctx.fillStyle = 'rgba(0,200,255,' + (0.03 + i * 0.01) + ')';
+              ctx.fill();
+            }
+            break;
+          case 'radial':
+            for (let r = 50; r < Math.max(W, H); r += 50) {
+              ctx.beginPath();
+              ctx.arc(W / 2, H / 2, r, 0, 2 * Math.PI);
+              ctx.fillStyle = 'rgba(0,200,255,' + (0.05 * (1 - r / Math.max(W, H))) + ')';
+              ctx.fill();
+              ctx.scale(1 + 0.05 * Math.sin(t + r * 0.01), 1 + 0.05 * Math.sin(t + r * 0.01));
+            }
+            break;
+          case 'layered':
+            for (let i = 0; i < 5; i++) {
+              ctx.beginPath();
+              const y0 = H / 5 * i + 30;
+              for (let x = 0; x <= W; x += 10) {
+                ctx.lineTo(x, y0 + Math.sin(x * 0.015 + t * (1 + i * 0.2)) * 25);
+              }
+              ctx.lineTo(W, H);
+              ctx.lineTo(0, H);
+              ctx.fillStyle = 'rgba(0,200,255,' + (0.04 + i * 0.01) + ')';
+              ctx.fill();
+            }
+            break;
+          case 'spiral':
+            ctx.beginPath();
+            for (let a = 0; a < 4 * Math.PI; a += 0.1) {
+              const r = 50 + a * 20 + Math.sin(t + a) * 20;
+              ctx.lineTo(W / 2 + r * Math.cos(a), H / 2 + r * Math.sin(a));
+            }
+            ctx.strokeStyle = 'rgba(0,200,255,0.2)';
+            ctx.lineWidth = 5;
+            ctx.stroke();
+            break;
+          case 'chaotic':
+            for (let i = 0; i < 3; i++) {
+              ctx.beginPath();
+              const y0 = H / 3 * i + 50;
+              for (let x = 0; x <= W; x += 5) {
+                const noise = Math.random() * 10 - 5;
+                ctx.lineTo(x, y0 + Math.sin(x * 0.02 + t + i) * 20 + noise);
+              }
+              ctx.lineTo(W, H);
+              ctx.lineTo(0, H);
+              ctx.fillStyle = 'rgba(0,200,255,' + (0.05 + i * 0.02) + ')';
+              ctx.fill();
+            }
+            break;
+          case 'pulse':
+            for (let i = 0; i < 4; i++) {
+              ctx.beginPath();
+              const amp = 20 * (1 + Math.sin(t + i) * 0.5), y0 = H / 4 * i + 50;
+              for (let x = 0; x <= W; x += 10) {
+                ctx.lineTo(x, y0 + Math.sin(x * 0.01 + t) * amp);
+              }
+              ctx.lineTo(W, H);
+              ctx.lineTo(0, H);
+              ctx.fillStyle = 'rgba(0,200,255,' + (0.03 + i * 0.01) + ')';
+              ctx.fill();
+            }
+            break;
+          case 'ripple':
+            for (let r = 20; r < 200; r += 20) {
+              ctx.beginPath();
+              ctx.arc(W / 2 + Math.sin(t) * 50, H / 2 + Math.cos(t) * 50, r, 0, 2 * Math.PI);
+              ctx.fillStyle = 'rgba(0,200,255,' + (0.1 * (1 - r / 200)) + ')';
+              ctx.fill();
+            }
+            break;
+          case 'flow':
+            for (let i = 0; i < 5; i++) {
+              ctx.beginPath();
+              const y0 = H / 5 * i + 30;
+              for (let x = 0; x <= W; x += 10) {
+                ctx.lineTo(x, y0 + Math.sin(x * 0.01 + t + i * 0.5) * 15 + Math.cos(x * 0.005 + t) * 10);
+              }
+              ctx.lineTo(W, H);
+              ctx.lineTo(0, H);
+              ctx.fillStyle = 'rgba(0,200,255,' + (0.04 + i * 0.01) + ')';
+              ctx.fill();
+            }
+            break;
+          case 'vortex':
+            ctx.beginPath();
+            for (let a = 0; a < 6 * Math.PI; a += 0.05) {
+              const r = 30 + a * 10 + Math.sin(t + a * 2) * 10;
+              ctx.lineTo(W / 2 + r * Math.cos(a + t * 0.5), H / 2 + r * Math.sin(a + t * 0.5));
+            }
+            ctx.strokeStyle = 'rgba(0,200,255,0.15)';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            break;
+        }
+      }
+
+      let soundLevel = 0;
+      if (config.sound && audioCtx && analyser) {
+        analyser.getByteFrequencyData(dataArr);
+        soundLevel = dataArr.reduce((a, b) => a + b, 0) / dataArr.length / 255;
+      }
+
+      if (config.light) {
+        ctx.shadowColor = 'rgba(0,255,255,0.5)';
+        ctx.shadowBlur = config.shadowIntensity;
+        ctx.shadowOffsetX = 5;
+        ctx.shadowOffsetY = 5;
+      } else {
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      }
+
+      ctx.save();
+      ctx.translate(W / 2, H / 2);
+      if (camEffects[config.cameraEffect] === 'zoom') {
+        const scale = 0.9 + 0.2 * Math.cos(Date.now() * 0.001);
+        ctx.scale(scale, scale);
+      } else if (camEffects[config.cameraEffect] === 'shake') {
+        const offsetX = (Math.random() - 0.5) * 5;
+        const offsetY = (Math.random() - 0.5) * 5;
+        ctx.translate(offsetX, offsetY);
+      } else if (camEffects[config.cameraEffect] === 'rotateView') {
+        ctx.rotate(Math.sin(Date.now() * 0.0005) * 0.05);
+      } else if (camEffects[config.cameraEffect] === 'pan') {
+        const offsetX = Math.sin(Date.now() * 0.0003) * 50;
+        const offsetY = Math.cos(Date.now() * 0.0003) * 50;
+        ctx.translate(offsetX, offsetY);
+      } else if (camEffects[config.cameraEffect] === 'orbit') {
+        const angle = Date.now() * 0.0005;
+        ctx.translate(30 * Math.cos(angle), 30 * Math.sin(angle));
+        ctx.rotate(angle * 0.1);
+      }
+      ctx.translate(-W / 2, -H / 2);
+
+      if (!config.use3D) {
+        if (config.trails) {
+          trailCtx.save();
+          if (config.layers) particles.sort((a, b) => a.z - b.z);
+        }
+        particles.forEach(p => {
+          let vx = p.vx * config.speedMultiplier;
+          let vy = p.vy * config.speedMultiplier;
+          if (config.physics) {
+            vy += config.physicsGravity;
+          }
+          if (config.mouse) {
+            const dx = mouseX - p.x, dy = mouseY - p.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 200) {
+              vx += dx * config.mouseAttraction;
+              vy += dy * config.mouseAttraction;
+              vx *= 0.9;
+              vy *= 0.9;
+            }
+          }
+          const centerX = W / 2, centerY = H / 2;
+          const maxRadius = Math.max(W, H) / 2;
+          switch (motions[config.motionIndex]) {
+            case 'drift':
+              break;
+            case 'rotate':
+              p.angle += 0.05 * config.speed * config.speedMultiplier;
+              break;
+            case 'pulse':
+              p.size = config.baseSize * (0.5 + Math.sin(p.phase + Date.now() * 0.005) * 0.5) * config.sizeMultiplier;
+              break;
+            case 'wave':
+              vy += Math.sin(p.phase + Date.now() * 0.002) * 0.1 * config.speed * config.speedMultiplier;
+              break;
+            case 'horizontalLine':
+              p.x += vx;
+              if (p.x < 0 || p.x > W) p.vx *= -1;
+              p.y = (p.rowIndex + 1) * (H / (Math.ceil(Math.sqrt(config.density)) + 1));
+              break;
+            case 'verticalLine':
+              p.y += vy;
+              if (p.y < 0 || p.y > H) p.vy *= -1;
+              p.x = (p.rowIndex + 1) * (W / (Math.ceil(Math.sqrt(config.density)) + 1));
+              break;
+            case 'diagonalLine':
+              p.x += vx;
+              p.y += vy;
+              if (p.x < 0 || p.x > W || p.y < 0 || p.y > H) {
+                p.vx *= -1;
+                p.vy *= -1;
+              }
+              break;
+            case 'gridHorizontal':
+              p.x += vx;
+              if (p.x < 0 || p.x > W) p.vx *= -1;
+              p.y = (p.rowIndex + 1) * (H / (Math.ceil(Math.sqrt(config.density)) + 1));
+              break;
+            case 'gridVertical':
+              p.y += vy;
+              if (p.y < 0 || p.y > H) p.vy *= -1;
+              p.x = (p.rowIndex + 1) * (W / (Math.ceil(Math.sqrt(config.density)) + 1));
+              break;
+            case 'waveRadial':
+              p.radialDistance += config.speed * Math.sin(p.phase + Date.now() * 0.002) * 2 * config.speedMultiplier;
+              if (p.radialDistance > maxRadius) p.radialDistance = maxRadius;
+              if (p.radialDistance < 0) p.radialDistance = 0;
+              break;
+            case 'zigzagRadial':
+              p.radialDistance += config.speed * (Math.sin(p.phase * 5) + 1) * 2 * config.speedMultiplier;
+              if (p.radialDistance > maxRadius) p.radialDistance = 0;
+              break;
+            case 'bounceRadial':
+              p.radialDistance += p.vx * config.speed * config.speedMultiplier;
+              if (p.radialDistance > maxRadius || p.radialDistance < 0) p.vx *= -1;
+              break;
+            case 'swirlOut':
+              p.radialDistance += config.speed * 2 * config.speedMultiplier;
+              p.angle += 0.1 * config.speed * Math.sin(p.phase) * config.speedMultiplier;
+              if (p.radialDistance > maxRadius) p.radialDistance = 0;
+              break;
+            case 'swirlIn':
+              p.radialDistance -= config.speed * 2 * config.speedMultiplier;
+              p.angle -= 0.1 * config.speed * Math.cos(p.phase) * config.speedMultiplier;
+              if (p.radialDistance < 0) p.radialDistance = maxRadius;
+              break;
+          }
+          if (['waveRadial', 'zigzagRadial', 'bounceRadial', 'swirlOut', 'swirlIn'].includes(motions[config.motionIndex])) {
+            const angle = p.angle;
+            p.x = centerX + p.radialDistance * Math.cos(angle);
+            p.y = centerY + p.radialDistance * Math.sin(angle);
+          } else if (!['horizontalLine', 'verticalLine', 'diagonalLine', 'gridHorizontal', 'gridVertical'].includes(motions[config.motionIndex])) {
+            p.x += vx;
+            p.y += vy;
+            if (p.x < 0 || p.x > W) p.vx *= -1;
+            if (p.y < 0 || p.y > H) p.vy *= -1;
+          }
+          p.phase += 0.01;
+
+          const targetCtx = config.trails ? trailCtx : ctx;
+          targetCtx.save();
+          targetCtx.translate(p.x, p.y);
+          targetCtx.rotate(p.angle);
+          if (config.layers) {
+            targetCtx.globalAlpha = 0.5 + p.z / 100;
+            targetCtx.scale(1 - p.z / 200, 1 - p.z / 200);
+          }
+          targetCtx.filter = config.motionBlur ? 'blur(' + config.motionBlurAmount + 'px)' : 'none';
+          if (config.blur > 0) targetCtx.filter += ' blur(' + config.blur + 'px)';
+          drawShape(targetCtx, shapes2D[config.shapeIndex], p.size * config.sizeMultiplier * (1 + soundLevel));
+          if (styles[config.styleIndex].includes('fill')) {
+            targetCtx.fillStyle = config.fillColor;
+            targetCtx.fill();
+          }
+          if (styles[config.styleIndex].includes('stroke')) {
+            targetCtx.strokeStyle = config.strokeColor;
+            targetCtx.lineWidth = 2;
+            targetCtx.stroke();
+          }
+          targetCtx.restore();
+        });
+        if (config.trails) {
+          trailCtx.restore();
+          ctx.drawImage(trailCanvas, 0, 0);
+        }
+      }
+      ctx.restore();
+
+      if (config.textEnabled) {
+        ctx.save();
+        let fontStyle = '';
+        if (config.textEffect === 'bold') fontStyle = 'bold ';
+        else if (config.textEffect === 'italic') fontStyle = 'italic ';
+        ctx.font = fontStyle + config.textSize + 'px Arial';
+        const textWidth = ctx.measureText(config.textContent).width;
+        const x = W / 2 - textWidth / 2;
+        const y = H / 2;
+        if (config.textEffect === 'blink') {
+          ctx.globalAlpha = 0.5 + 0.5 * Math.sin(Date.now() * 0.005);
+        } else if (config.textEffect === 'extrude') {
+          for (let i = 10; i >= 0; i--) {
+            ctx.fillStyle = 'hsl(180, 50%, ' + (50 - i * 5) + '%)';
+            ctx.fillText(config.textContent, x - i * 0.5, y + i * 0.5);
+          }
+          ctx.fillStyle = config.textColor;
+          ctx.fillText(config.textContent, x, y);
+        } else {
+          ctx.fillStyle = config.textColor;
+          ctx.strokeStyle = config.textColor;
+          ctx.lineWidth = 2;
+          if (config.textEffect === 'shadow') {
+            ctx.shadowColor = 'rgba(0,255,255,0.5)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetX = 5;
+            ctx.shadowOffsetY = 5;
+          } else if (config.textEffect === 'outline') {
+            ctx.strokeText(config.textContent, x, y);
+          }
+          ctx.fillText(config.textContent, x, y);
+        }
+        ctx.restore();
+      }
+
+      if (config.kaleido) {
+        ctx.save();
+        ctx.translate(W / 2, H / 2);
+        for (let i = 0; i < config.kaleidoSegments; i++) {
+          ctx.rotate(2 * Math.PI / config.kaleidoSegments);
+          ctx.scale(1 + 0.05 * Math.sin(Date.now() * 0.001), 1 + 0.05 * Math.sin(Date.now() * 0.001));
+          ctx.drawImage(canvas, -W / 2, -H / 2);
+          ctx.scale(1 / (1 + 0.05 * Math.sin(Date.now() * 0.001)), 1 / (1 + 0.05 * Math.sin(Date.now() * 0.001)));
+        }
+        ctx.restore();
+      }
+
+      if (config.showFPS) {
+        frameCount++;
+        const now = performance.now();
+        if (now - lastTime >= 500) {
+          fps = Math.round(frameCount * 1000 / (now - lastTime));
+          lastTime = now;
+          frameCount = 0;
+        }
+        fpsDiv.textContent = 'FPS: ' + fps;
+      } else {
+        fpsDiv.textContent = '';
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    const threeCanvas = document.getElementById('threeDCanvas'),
+          renderer3 = new THREE.WebGLRenderer({ canvas: threeCanvas, alpha: true }),
+          scene3 = new THREE.Scene(),
+          camera3 = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
+    // ... (rest of the 3D and init/resize code - no changes needed for screen recording)
+    camera3.position.set(0, 0, 5);
+    renderer3.shadowMap.enabled = true;
+    renderer3.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    let particleMeshes = [];
+    function update3DParticles() {
+      particleMeshes.forEach(mesh => scene3.remove(mesh));
+      particleMeshes = [];
+
+      if (config.use3D) {
+        const shape = shapes2D[config.shapeIndex];
+        const size = 0.05;
+        let geometry;
+        if (shape === 'circle') {
+          geometry = new THREE.SphereGeometry(size, 16, 16);
+        } else {
+          const path = createShapePath(shape, size);
+          if (path) {
+            const shape2D = new THREE.Shape(path.getPoints());
+            geometry = new THREE.ExtrudeGeometry(shape2D, { depth: 0.1, bevelEnabled: false });
+          } else {
+            geometry = new THREE.SphereGeometry(size, 16, 16);
+          }
+        }
+        const material = new THREE.MeshPhongMaterial({ color: parseInt(config.fillColor.slice(1), 16) });
+        particles.forEach(p => {
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.position.set(
+            (p.x / W - 0.5) * 4,
+            -(p.y / H - 0.5) * 4,
+            (config.layers ? p.z / 100 : 0) * 2 - 1
+          );
+          mesh.scale.setScalar(p.size * config.sizeMultiplier / 100);
+          scene3.add(mesh);
+          particleMeshes.push(mesh);
+        });
+
+        const planeGeometry = new THREE.PlaneGeometry(10, 10);
+        const planeMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.receiveShadow = true;
+        plane.position.z = -2;
+        scene3.add(plane);
+
+        const light = new THREE.PointLight(0xffffff, 1, 10);
+        light.castShadow = true;
+        light.position.set(2, 2, 2);
+        scene3.add(light);
+      }
+    }
+
+    const torusKnotGeometry = new THREE.TorusKnotGeometry(1, 0.4, 100, 16);
+    const torusKnotMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, shininess: 100 });
+    const torusKnot = new THREE.Mesh(torusKnotGeometry, torusKnotMaterial);
+    scene3.add(torusKnot);
+    const torusLight = new THREE.PointLight(0xffffff, 1, 100);
+    torusLight.position.set(5, 5, 5);
+    scene3.add(torusLight);
+
+    function draw3() {
+      if (config.use3D) {
+        threeCanvas.style.display = 'block';
+        torusKnot.rotation.x += 0.01;
+        torusKnot.rotation.y += 0.01;
+        renderer3.setSize(W, H);
+        renderer3.render(scene3, camera3);
+      } else {
+        threeCanvas.style.display = 'none';
+        particleMeshes.forEach(mesh => scene3.remove(mesh));
+        particleMeshes = [];
+      }
+      requestAnimationFrame(draw3);
+    }
+
+
+    window.addEventListener('resize', () => {
+      W = canvas.width = innerWidth;
+      H = canvas.height = innerHeight;
+      trailCanvas.width = W;
+      trailCanvas.height = H;
+      threeCanvas.width = W;
+      threeCanvas.height = H;
+      camera3.aspect = W / H;
+      camera3.updateProjectionMatrix();
+      initParticles();
+      update3DParticles();
+    });
+
+    // --- Screen Recording JavaScript ---
+    document.getElementById('startRecordBtn').addEventListener('click', async function() {
+      const btn = this;
+      const statusEl = document.getElementById('recordStatus'); // Changed ID
+      const resVal = document.getElementById('resolutionSelect').value; // Changed ID
+      let recWidth, recHeight;
+
+      if (resVal === '4k') { recWidth = 3840; recHeight = 2160; }
+      else if (resVal === '8k') { recWidth = 7680; recHeight = 4320; }
+      else if (resVal === 'canvas') { recWidth = W; recHeight = H; } // Use canvas dimensions
+      else { recWidth = 1920; recHeight = 1080; }
+
+      btn.disabled = true;
+      // Hide UI elements for cleaner recording
+      document.getElementById('toolbar').style.display = 'none';
+      document.getElementById('subtoolbar').style.display = 'none';
+      document.getElementById('screenRecordControls').style.display = 'none';
+      document.querySelector('footer').style.display = 'none';
+
+
+      statusEl.textContent = `מבקש הרשאות לכידת מסך ${recWidth}×${recHeight}...`;
+      if (!navigator.mediaDevices?.getDisplayMedia && !canvas.captureStream) {
+        alert('הדפדפן אינו תומך בלכידת מסך/canvas. נא השתמש ב-Chrome עדכני.');
+        btn.disabled = false; statusEl.textContent = '';
+        // Restore UI
+        document.getElementById('toolbar').style.display = 'flex';
+        document.getElementById('subtoolbar').style.display = 'flex';
+        document.querySelector('footer').style.display = 'block';
+        return;
+      }
+
+      let stream;
+      try {
+        // Prefer capturing the canvas directly if possible and 'canvas' resolution is chosen
+        if (resVal === 'canvas' && canvas.captureStream) {
+            console.log("Attempting to capture canvas stream directly.");
+            stream = canvas.captureStream(60); // 60 FPS
+            const videoTrack = stream.getVideoTracks()[0];
+            const trackSettings = videoTrack.getSettings();
+            // Ensure captured stream matches canvas dimensions, might need adjustments
+             await videoTrack.applyConstraints({
+                width: { ideal: recWidth, exact: recWidth },
+                height: { ideal: recHeight, exact: recHeight },
+                frameRate: { ideal: 60 }
+            });
+            console.log("Canvas stream captured with settings:", videoTrack.getSettings());
+        } else {
+            console.log("Attempting to capture display media.");
+            stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { width: { ideal: recWidth }, height: { ideal: recHeight }, frameRate: { ideal: 60 }, displaySurface: 'monitor' },
+                audio: false // No audio for background generator
+            });
+             console.log("Display media stream captured.");
+        }
+      } catch(e) {
+        alert('ההרשאה נדחתה או אירעה שגיאה בלכידה: ' + e.message);
+        console.error("Error capturing stream:", e);
+        btn.disabled = false; statusEl.textContent = '';
+        // Restore UI
+        document.getElementById('toolbar').style.display = 'flex';
+        document.getElementById('subtoolbar').style.display = 'flex';
+        // document.getElementById('screenRecordControls').style.display = 'flex'; // Keep it hidden if recording failed
+        document.querySelector('footer').style.display = 'block';
+        return;
+      }
+
+      const pre = document.getElementById('preOverlay');
+      pre.style.display = 'flex';
+      for (let i = 3; i > 0; i--) {
+        pre.textContent = i;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+      pre.style.display = 'none';
+
+      const border = document.getElementById('borderOverlay');
+      const side = document.getElementById('sideCounter');
+      border.style.display = 'block';
+      side.style.display = 'block';
+      let sideCount = 8;
+      side.textContent = sideCount;
+
+      statusEl.textContent = 'הקלטה בעיצומה...';
+      const mime = MediaRecorder.isTypeSupported('video/webm; codecs=vp9')
+        ? 'video/webm; codecs=vp9' : 'video/webm; codecs=vp8';
+      const bits = resVal === '8k' ? 25000000 : resVal === '4k' ? 15000000 : (resVal === 'canvas' ? 10000000 : 8000000); // Adjusted bitrates
+      let recorder;
+      try {
+          recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bits });
+      } catch (e) {
+          alert('שגיאה ביצירת MediaRecorder: ' + e.message);
+          console.error("Error creating MediaRecorder:", e);
+          stream.getTracks().forEach(t => t.stop());
+          btn.disabled = false; statusEl.textContent = '';
+          border.style.display = 'none'; side.style.display = 'none';
+          document.getElementById('toolbar').style.display = 'flex';
+          document.getElementById('subtoolbar').style.display = 'flex';
+          document.querySelector('footer').style.display = 'block';
+          return;
+      }
+
+      const chunks = [];
+      recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+
+      const sideInterval = setInterval(() => {
+        sideCount--;
+        side.textContent = sideCount;
+        if (sideCount <= 0) clearInterval(sideInterval);
+      }, 1000);
+
+      recorder.onstop = async () => {
+        clearInterval(sideInterval);
+        stream.getTracks().forEach(t => t.stop());
+        statusEl.textContent = 'מעבד ושומר...';
+        const blob = new Blob(chunks, { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.style.display = 'none';
+        a.href = url; a.download = `background_capture_${recWidth}x${recHeight}.webm`;
+        document.body.appendChild(a); a.click();
+        URL.revokeObjectURL(url); document.body.removeChild(a);
+        statusEl.textContent = 'ההקלטה הסתיימה והקובץ הורד.';
+        btn.disabled = false;
+        border.style.display = 'none'; side.style.display = 'none';
+        // Restore UI
+        document.getElementById('toolbar').style.display = 'flex';
+        document.getElementById('subtoolbar').style.display = 'flex';
+        // document.getElementById('screenRecordControls').style.display = 'flex'; // Keep it hidden
+        document.querySelector('footer').style.display = 'block';
+      };
+      recorder.onerror = (event) => {
+        console.error("MediaRecorder error: ", event.error);
+        alert(`שגיאת מקליט: ${event.error.name} - ${event.error.message}`);
+        clearInterval(sideInterval);
+        stream.getTracks().forEach(t => t.stop());
+        btn.disabled = false; statusEl.textContent = 'הקלטה נכשלה.';
+        border.style.display = 'none'; side.style.display = 'none';
+        // Restore UI
+        document.getElementById('toolbar').style.display = 'flex';
+        document.getElementById('subtoolbar').style.display = 'flex';
+        document.querySelector('footer').style.display = 'block';
+      };
+
+      recorder.start();
+      setTimeout(() => {
+          if(recorder.state === "recording") {
+            recorder.stop()
+          }
+      }, 8000);
+    });
+    // --- End Screen Recording JavaScript ---
+
+
+    // Init
+    initParticles();
+    document.getElementById(btnMap.palette).classList.add('active'); // Default active button
+    renderSub('palette'); // Render default subtoolbar
+    draw();
+    draw3();
+  </script>
+</body>
+</html>
